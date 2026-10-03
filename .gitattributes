@@ -1,0 +1,6 @@
+# Keep tests and tooling out of `composer install --prefer-dist` archives.
+/tests export-ignore
+/phpunit.xml.dist export-ignore
+/phpstan.neon.dist export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
