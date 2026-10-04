@@ -4,7 +4,7 @@ All notable changes to `honk-me/honk-me` (Composer) are documented here. The for
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - 2026-10-03
+## [0.1.0] - 2026-10-04
 
 ### Added
 - Framework-agnostic `HonkMe\Client` for `POST /v1/messages` (PHP 8.3+), using ext-curl with

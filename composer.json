@@ -1,25 +1,29 @@
 {
     "name": "honk-me/honk-me",
-    "description": "Official PHP client for Honk: send events from apps, scripts and automations to your phone. Laravel facade, queued sends and notification channel included.",
+    "description": "Official PHP client for Honk (honk-me.app): send events from apps, scripts and automations to your phone. Laravel facade, queued sends and notification channel included.",
     "type": "library",
     "license": "MIT",
     "keywords": [
         "honk",
+        "honk-me",
         "notifications",
         "push",
+        "push-notifications",
         "alerts",
         "laravel",
         "notification-channel",
-        "monitoring"
+        "monitoring",
+        "sdk"
     ],
     "homepage": "https://github.com/honk-me/honk-php",
     "support": {
-        "issues": "https://github.com/honk-me/honk/issues",
+        "issues": "https://github.com/honk-me/honk-php/issues",
         "source": "https://github.com/honk-me/honk-php"
     },
     "authors": [
         {
-            "name": "Honk contributors"
+            "name": "Honk contributors",
+            "homepage": "https://honk-me.app"
         }
     ],
     "require": {

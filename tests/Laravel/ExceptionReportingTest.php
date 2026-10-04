@@ -38,10 +38,11 @@ final class ExceptionReportingTest extends TestCase
         report(new LogicException('another place'));
 
         Honk::assertSentTimes(2);
-        // "exceptions/<class>@<file relative to base_path()>:<line>" (absolute under Testbench).
+        // "exceptions/<class>@<file relative to base_path()>:<line>" (absolute under Testbench), or
+        // "exceptions/<class>@<file name>:<line>#<hash>" when that is over 128 characters (long paths).
         Honk::assertSent(function (Message $m) use ($line) {
             return str_starts_with((string) $m->groupKey, 'exceptions/RuntimeException@')
-                && str_ends_with((string) $m->groupKey, "ExceptionReportingTest.php:{$line}")
+                && str_contains((string) $m->groupKey, "ExceptionReportingTest.php:{$line}")
                 && $m->eventType === 'problem'
                 && $m->severity === Severity::Long
                 && $m->channel === 'exceptions'

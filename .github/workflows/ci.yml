@@ -1,0 +1,38 @@
+# Tests on every push and pull request; release.yml calls it before tagging a GitHub release.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: php ${{ matrix.php }} / laravel 13
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5'] # Laravel 13 supports PHP 8.3-8.5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, mbstring
+          coverage: none
+      - run: composer validate --strict
+      - run: composer update --prefer-dist --no-interaction --no-progress
+      - run: composer test
+      - if: matrix.php == '8.4'
+        run: composer analyse -- --no-progress

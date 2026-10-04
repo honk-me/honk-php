@@ -1,8 +1,11 @@
 # honk-me/honk-me
 
-Official PHP client for [Honk](https://github.com/honk-me/honk), the self-hosted inbox that
-turns events from your apps, scripts, cron jobs and CI into calm, grouped push notifications
-on your phone. Framework-agnostic, with a first-class Laravel 13 integration.
+[![CI](https://github.com/honk-me/honk-php/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-me/honk-php/actions/workflows/ci.yml)
+[![Packagist](https://img.shields.io/packagist/v/honk-me/honk-me)](https://packagist.org/packages/honk-me/honk-me)
+
+Official PHP client for [Honk](https://honk-me.app), the inbox that turns events from your
+apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
+Framework-agnostic, with a first-class Laravel 13 integration.
 
 - PHP 8.3+. ext-curl with keep-alive by default, or any PSR-18 client.
 - Laravel 13: auto-discovered provider, `Honk` facade, `Honk::defer()` / `Honk::queue()`,
@@ -18,6 +21,9 @@ The ingestion key (`honk_…`) is a secret: keep it in `.env`, never in front-en
 ```sh
 composer require honk-me/honk-me
 ```
+
+Create a project and an ingestion key at [honk-me.app](https://honk-me.app). Its
+*Integrations* page generates ready-to-paste code for plain PHP and Laravel.
 
 ## Quick start
 
@@ -361,7 +367,17 @@ try {
 composer install
 composer test                 # unit tests (scriptable mock server) + Laravel 13 tests (Orchestra Testbench 11)
 composer analyse              # PHPStan level max with Larastan
-HONK_URL=… HONK_KEY=… composer test:integration   # against a real server, see ../README.md
+HONK_URL=… HONK_KEY=… composer test:integration   # against a real server (use a test project's key)
 ```
+
+The version lives in `HonkMe\Client::VERSION` (also the User-Agent). Releases: push a tag
+`vX.Y.Z` matching it; Packagist picks the tag up (see `CHANGELOG.md`).
+
+## Links
+
+- [honk-me.app](https://honk-me.app): the Honk inbox (web, iPhone).
+- Other SDKs: [Node.js](https://github.com/honk-me/honk-node),
+  [Go + CLI](https://github.com/honk-me/honk-go), [Swift](https://github.com/honk-me/honk-swift),
+  [Kotlin / Java](https://github.com/honk-me/honk-kotlin).
 
 MIT License.
