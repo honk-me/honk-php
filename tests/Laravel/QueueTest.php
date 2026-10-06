@@ -83,6 +83,34 @@ final class QueueTest extends TestCase
         Queue::assertPushed(SendHonkMessage::class, fn (SendHonkMessage $job): bool => $job->message['severity'] === 'warning');
     }
 
+    public function testActionsTravelWithTheQueuedJob(): void
+    {
+        Queue::fake();
+        Honk::queue(HonkMessage::make('Ana asked for a quote')->action('Reply', 'mailto:ana@acme.example')->action('Call Ana', 'tel:+15550134'), 'request-4812');
+        $actions = [['title' => 'Reply', 'url' => 'mailto:ana@acme.example'], ['title' => 'Call Ana', 'url' => 'tel:+15550134']];
+        $queued = null;
+        Queue::assertPushed(SendHonkMessage::class, function (SendHonkMessage $job) use (&$queued, $actions): bool {
+            $this->assertSame($actions, $job->message['actions']);
+            $queued = serialize($job);
+
+            return true;
+        });
+        unserialize($queued)->handle(app(HonkManager::class));
+        $this->assertSame($actions, $this->lastBody()['actions']);
+    }
+
+    public function testInvalidActionsThrowAtDispatch(): void
+    {
+        Queue::fake();
+        try {
+            Honk::queue(['message' => 'x', 'actions' => [['title' => 'Run', 'url' => 'javascript:alert(1)']]]);
+            $this->fail('expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('actions[0].url', $e->fields[0]->field);
+        }
+        Queue::assertNothingPushed();
+    }
+
     public function testInvalidMessagesThrowAtDispatch(): void
     {
         Queue::fake();

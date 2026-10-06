@@ -72,6 +72,23 @@ final class IntegrationTest extends TestCase
         $this->assertEquals($first->receivedAt, $again->receivedAt);
     }
 
+    public function testCustomerRequestWithActionsIsAcceptedAndAReplayIsADuplicate(): void
+    {
+        $honk = $this->client();
+        $message = Message::make('Ana Pop (Acme) asked for a quote: online shop, 40 products')
+            ->title('Customer request ' . self::$run)
+            ->category('customers')
+            ->groupKey('requests/' . self::$run . '/actions')
+            ->action('Reply', 'mailto:ana@acme.example?subject=Your%20quote')
+            ->action('Call Ana', 'tel:+15550134')
+            ->action('Open request', 'https://example.com/admin/requests/4812');
+        $key = 'it-' . Uuid::v7();
+        $first = $honk->send($message, $key);
+        $again = $honk->send($message, $key);
+        $this->assertTrue($again->duplicate);
+        $this->assertSame($first->id, $again->id);
+    }
+
     public function testSameKeyDifferentPayloadIsAConflict(): void
     {
         $honk = $this->client();
@@ -139,6 +156,18 @@ final class IntegrationTest extends TestCase
             $fields = array_map(static fn ($f) => "{$f->field}:{$f->code}", $e->fields);
             sort($fields);
             $this->assertSame(['severity:invalid_enum', 'ttl_seconds:out_of_range'], $fields);
+        }
+    }
+
+    public function testServerSideActionValidationNamesTheAction(): void
+    {
+        try {
+            $this->client(['validate' => false])->send(Message::make('x')->action('Call', 'tel:+15550134')->action('Run', 'javascript:alert(1)'));
+            $this->fail('expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertFalse($e->local);
+            $this->assertSame(422, $e->status);
+            $this->assertSame(['actions[1].url:invalid_format'], array_map(static fn ($f) => "{$f->field}:{$f->code}", $e->fields));
         }
     }
 }

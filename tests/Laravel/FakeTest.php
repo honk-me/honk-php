@@ -47,6 +47,15 @@ final class FakeTest extends TestCase
         Honk::assertSent(fn (Message $m) => $m->source === 'laravel' && $m->environment === 'testing' && $m->title === null);
     }
 
+    public function testRecordedMessagesKeepTheirActions(): void
+    {
+        Honk::fake();
+        Honk::send(['message' => 'Ana asked for a quote', 'actions' => [['title' => 'Call Ana', 'url' => 'tel:+15550134']]]);
+        Honk::defer()->light('New request', 'Ana asked for a quote', ['actions' => [['title' => 'Reply', 'url' => 'mailto:ana@acme.example']]]);
+        Honk::assertSent(fn (Message $m) => $m->actions === [['title' => 'Call Ana', 'url' => 'tel:+15550134']]);
+        Honk::assertSent(fn (Message $m) => ($m->actions[0]['url'] ?? null) === 'mailto:ana@acme.example');
+    }
+
     public function testInvalidMessagesStillThrow(): void
     {
         Honk::fake();

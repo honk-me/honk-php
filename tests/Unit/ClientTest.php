@@ -99,6 +99,26 @@ final class ClientTest extends TestCase
         $this->assertSame('{"message":"Backup finished in 42s","group_key":"db/backup"}', $this->server->requests()[0]['body']);
     }
 
+    public function testActionsAreSentInOrderAndEmptyActionsAreOmitted(): void
+    {
+        $honk = $this->client();
+        $honk->send(Message::make('Ana asked for a quote')
+            ->action('Reply', 'mailto:ana@acme.example?subject=Your%20quote')
+            ->action('Call Ana', 'tel:+15550134')
+            ->action('Open request', 'https://shop.example.com/admin/requests/4812'));
+        $honk->send(['message' => 'x', 'actions' => []]);
+        $honk->send(['message' => 'x', 'actions' => null]);
+        $honk->loud('Disk 91%', '/var on app-01', ['actions' => [['title' => 'Text on-call', 'url' => 'sms:+15550134?body=Disk%2091%25']]]);
+        $r = $this->server->requests();
+        $this->assertSame(
+            '{"message":"Ana asked for a quote","actions":[{"title":"Reply","url":"mailto:ana@acme.example?subject=Your%20quote"},{"title":"Call Ana","url":"tel:+15550134"},{"title":"Open request","url":"https://shop.example.com/admin/requests/4812"}]}',
+            $r[0]['body'],
+        );
+        $this->assertSame('{"message":"x"}', $r[1]['body']);
+        $this->assertSame('{"message":"x"}', $r[2]['body']);
+        $this->assertSame([['title' => 'Text on-call', 'url' => 'sms:+15550134?body=Disk%2091%25']], json_decode($r[3]['body'], true)['actions']);
+    }
+
     public function testDefaultsFillUnsetFields(): void
     {
         $honk = $this->client(['defaults' => ['source' => 'laravel', 'environment' => 'production', 'channel' => null]]);

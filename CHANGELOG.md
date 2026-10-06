@@ -4,6 +4,16 @@ All notable changes to `honk-me/honk-me` (Composer) are documented here. The for
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `actions`: up to 3 buttons on a message, `['title' => …, 'url' => …]` with an `https://`,
+  `mailto:`, `tel:` or `sms:` URL. `Message::action($title, $url)` adds one,
+  `Message::actions([...])` replaces them, and arrays take `'actions'`. Validated locally
+  like the server does, with errors named `actions[1].url`. They pass through the Laravel
+  facade, `Honk::defer()`, `Honk::queue()`, the notification channel and `Honk::fake()`.
+  Empty `actions` are omitted, so messages without buttons are sent exactly as before.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added

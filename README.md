@@ -278,14 +278,16 @@ $client->send(Message|array $message, ?string $idempotencyKey = null): Accepted 
 | `occurredAt` | `DateTimeInterface` (Carbon works) or RFC 3339 string |
 | `url` | `https://` only, no credentials |
 | `imageUrl` | `https://` only, no credentials or `#fragment`; fetched by the server afterwards |
+| `actions` (`->action($title, $url)`) | up to 3 buttons `['title' => …, 'url' => …]`, the first is the primary; see below |
 | `metadata` (`->meta($k, $v)`) | ≤ 16 keys `[A-Za-z0-9_.-]{1,64}`; string (≤ 512 chars), int, float or bool values |
 | `ttlSeconds` | push lifetime 60–86400, default 3600 |
 | `sourceSequence` | 0 … 2^53-1, needs `groupKey` |
 | `idempotencyKey` | 1–128 printable ASCII characters |
 
 Arrays use the same camelCase keys (`['message' => …, 'groupKey' => …]`); snake_case keys
-are rejected with a hint. Null and empty optional fields are omitted. A returned `Accepted`
-means Honk **durably stored** the message (`202`), not that a push was delivered or read.
+are rejected with a hint. Null and empty optional fields (and empty `actions`) are omitted. A
+returned `Accepted` means Honk **durably stored** the message (`202`), not that a push was
+delivered or read.
 
 Helpers (`$options` takes any field in camelCase plus `idempotencyKey`):
 
@@ -295,6 +297,32 @@ $client->light($title, $message, $options);  $client->beep(...);  $client->long(
 $client->problem('db/backup', 'Backup failed', 'pg_dump exited with 1');   // a long honk by default
 $client->recovery('db/backup', 'Backup OK', 'pg_dump finished in 41 s');   // a beep by default
 ```
+
+### Buttons (actions)
+
+Up to three buttons on the message, in display order: reply to the customer, call them, open
+the order.
+
+```php
+$client->send(Message::make('Ana Pop (Acme) asked for a quote: online shop, 40 products')
+    ->title('New request: online shop quote')
+    ->category('customers')
+    ->groupKey('requests/4812')
+    ->action('Reply', 'mailto:ana@acme.example?subject=' . rawurlencode('Your quote'))
+    ->action('Call Ana', 'tel:+15550134'));
+```
+
+- `title`: 1–40 characters, one line, shown as sent.
+- `url`, at most 2048 bytes without spaces: `https://` (no credentials); `mailto:` with one
+  address and optionally `?subject=…&body=…` (percent-encoded with `rawurlencode()`, no other
+  keys); `tel:` with a number (digits, `-` `.` `(` `)`, `+` only first); `sms:` with a number
+  and optionally `?body=…`. Other schemes are refused.
+- Honk never opens or fetches them; the app does when you tap one. They appear on the
+  message in the app and the web inbox, and on iPhone notifications that show the message
+  text. Errors name the button: `actions[1].url`.
+- The same works in `toHonk()` (`HonkMessage::create()->action(…)`), in arrays
+  (`'actions' => [['title' => 'Call Ana', 'url' => 'tel:+15550134']]`), with `Honk::queue()`
+  and `Honk::defer()`. `->actions([...])` replaces the list.
 
 ### Options
 

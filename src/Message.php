@@ -15,7 +15,8 @@ use HonkMe\Exception\ValidationException;
  *         ->priority('high')
  *         ->category('customers')
  *         ->groupKey('requests/4812')
- *         ->url('https://shop.example.com/admin/requests/4812');
+ *         ->url('https://shop.example.com/admin/requests/4812')
+ *         ->action('Reply', 'mailto:ana@acme.example?subject=Your%20quote');
  *
  * Fields mirror POST /v1/messages in camelCase (groupKey → group_key). Null fields are omitted.
  */
@@ -34,6 +35,8 @@ class Message
     public DateTimeInterface|string|null $occurredAt = null;
     public ?string $url = null;
     public ?string $imageUrl = null;
+    /** @var array<array-key, mixed>|null up to 3 ['title' => …, 'url' => …] buttons, in display order; checked when sent */
+    public ?array $actions = null;
     /** @var array<array-key, mixed>|null string keys and string/int/float/bool values; checked when sent */
     public ?array $metadata = null;
     public ?int $ttlSeconds = null;
@@ -56,6 +59,7 @@ class Message
         'occurredAt' => 'occurred_at',
         'url' => 'url',
         'imageUrl' => 'image_url',
+        'actions' => 'actions',
         'metadata' => 'metadata',
         'ttlSeconds' => 'ttl_seconds',
         'sourceSequence' => 'source_sequence',
@@ -130,13 +134,15 @@ class Message
                 default => null,
             };
 
-            return !in_array($field, ['metadata', 'ttlSeconds', 'sourceSequence'], true);
+            return !in_array($field, ['actions', 'metadata', 'ttlSeconds', 'sourceSequence'], true);
         }
 
         if ($field === 'severity' && $value instanceof Severity) {
             $this->severity = $value;
         } elseif ($field === 'occurredAt' && $value instanceof DateTimeInterface) {
             $this->occurredAt = $value;
+        } elseif ($field === 'actions' && is_array($value)) {
+            $this->actions = $value;
         } elseif ($field === 'metadata' && is_array($value)) {
             $this->metadata = $value;
         } elseif ($field === 'ttlSeconds' && is_int($value)) {
@@ -343,6 +349,34 @@ class Message
     public function imageUrl(string $imageUrl): static
     {
         $this->imageUrl = $imageUrl;
+
+        return $this;
+    }
+
+    /**
+     * Adds a button (at most 3, in display order; the first is the primary). Honk never opens the
+     * URL; the app does when the button is tapped.
+     *
+     * @param string $title 1–40 characters, one line, shown as sent: "Reply", "Call Ana"
+     * @param string $url   https:// (no credentials), mailto: with one address (?subject=…&body=…
+     *                      percent-encoded, no other keys), tel: or sms: with a number (sms: also
+     *                      ?body=…); at most 2048 bytes, no spaces
+     */
+    public function action(string $title, string $url): static
+    {
+        $this->actions[] = ['title' => $title, 'url' => $url];
+
+        return $this;
+    }
+
+    /**
+     * Replaces the buttons: a list of ['title' => …, 'url' => …] (see action()).
+     *
+     * @param list<array{title: string, url: string}> $actions
+     */
+    public function actions(array $actions): static
+    {
+        $this->actions = $actions;
 
         return $this;
     }

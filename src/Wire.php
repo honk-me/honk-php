@@ -20,6 +20,8 @@ final class Wire
     public const MAX_BODY_BYTES = 16384;
     public const MAX_MESSAGE_BYTES = 8192;
     public const MAX_URL_BYTES = 2048;
+    public const MAX_ACTIONS = 3;
+    public const MAX_ACTION_TITLE = 40;
 
     public const SEVERITIES = ['info', 'success', 'warning', 'error', 'critical'];
     public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -31,6 +33,15 @@ final class Wire
     private const CONTROL = '/[\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]/u';
     private const CONTROL_EXCEPT_BREAKS = '/[\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]/u';
     private const RFC3339 = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/';
+    // Unicode White_Space (Go's unicode.IsSpace, as on the server), for action URLs and titles.
+    private const SPACE = '\s\x{0085}\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}';
+    // The number of a tel: or sms: action: an optional leading +, digits and - . ( ) separators.
+    private const PHONE_NUMBER = '/^\+?[0-9().-]*[0-9][0-9().-]*$/D';
+    // A single plain mailto: address, once percent-decoded: dot-atom@dot-atom with a dotted domain
+    // (or an IPv4 literal).
+    private const ATOM = '[A-Za-z0-9!#$%&\'*+\/=?^_`{|}~\-\x{80}-\x{10FFFF}]+';
+    private const MAIL_ADDRESS = '/^' . self::ATOM . '(\.' . self::ATOM . ')*@(' . self::ATOM . '(\.' . self::ATOM . ')+|\[[0-9.]*\.[0-9.]*\])$/uD';
+    private const BAD_ESCAPE = '/%(?![0-9A-Fa-f]{2})/';
 
     /**
      * @param array{source?: ?string, environment?: ?string, channel?: ?string} $defaults
@@ -47,7 +58,7 @@ final class Wire
             if (($value === null || $value === '') && in_array($field, ['source', 'environment', 'channel'], true)) {
                 $value = $defaults[$field] ?? null;
             }
-            if ($value === null || $value === '') {
+            if ($value === null || $value === '' || ($field === 'actions' && $value === [])) {
                 continue;
             }
             if ($value instanceof DateTimeInterface) {
@@ -182,6 +193,9 @@ final class Wire
         if (isset($b['image_url']) && !self::validUrl($b['image_url'], true)) {
             $e[] = new FieldError('image_url', 'invalid_format', 'must be an https URL without credentials or fragment, at most 2048 bytes');
         }
+        if (isset($b['actions'])) {
+            self::checkActions($b['actions'], $e);
+        }
 
         if (isset($b['metadata'])) {
             $md = $b['metadata'];
@@ -214,6 +228,115 @@ final class Wire
         if ($ttl !== null && (!is_int($ttl) || $ttl < 60 || $ttl > 86400)) {
             $e[] = new FieldError('ttl_seconds', 'out_of_range', 'must be an integer between 60 and 86400');
         }
+    }
+
+    /** @param list<FieldError> $e */
+    private static function checkActions(mixed $actions, array &$e): void
+    {
+        $format = "must be a list of at most 3 ['title' => …, 'url' => …]";
+        if (!is_array($actions) || !array_is_list($actions)) {
+            $e[] = new FieldError('actions', 'invalid_format', $format);
+
+            return;
+        }
+        if (count($actions) > self::MAX_ACTIONS) {
+            $e[] = new FieldError('actions', 'too_long', 'at most ' . self::MAX_ACTIONS . ' actions');
+
+            return;
+        }
+        $list = [];
+        foreach ($actions as $a) {
+            if (!is_array($a) || ($a !== [] && array_is_list($a))) {
+                $e[] = new FieldError('actions', 'invalid_format', $format);
+
+                return;
+            }
+            $list[] = $a;
+        }
+        foreach ($list as $i => $a) {
+            $field = "actions[{$i}]";
+            $title = is_string($a['title'] ?? null) ? self::trimSpace($a['title']) : $a['title'] ?? null;
+            if ($title === null || $title === '') {
+                $e[] = new FieldError("{$field}.title", 'required', 'title is required');
+            } elseif (!is_string($title)) {
+                $e[] = new FieldError("{$field}.title", 'invalid_format', 'must be a string');
+            } elseif (!self::utf8($title)) {
+                $e[] = new FieldError("{$field}.title", 'invalid_utf8', 'must be valid UTF-8');
+            } elseif (self::length($title) > self::MAX_ACTION_TITLE) {
+                $e[] = new FieldError("{$field}.title", 'too_long', 'must be at most ' . self::MAX_ACTION_TITLE . ' characters');
+            } elseif (preg_match(self::CONTROL, $title) === 1) {
+                $e[] = new FieldError("{$field}.title", 'invalid_format', 'must be one line without control characters');
+            }
+
+            $url = is_string($a['url'] ?? null) ? self::trimSpace($a['url']) : $a['url'] ?? null;
+            if ($url === null || $url === '') {
+                $e[] = new FieldError("{$field}.url", 'required', 'url is required');
+            } elseif (!is_string($url)) {
+                $e[] = new FieldError("{$field}.url", 'invalid_format', 'must be a string');
+            } elseif (!self::utf8($url)) {
+                $e[] = new FieldError("{$field}.url", 'invalid_utf8', 'must be valid UTF-8');
+            } elseif (strlen($url) > self::MAX_URL_BYTES) {
+                $e[] = new FieldError("{$field}.url", 'too_long', 'must be at most ' . self::MAX_URL_BYTES . ' bytes');
+            } elseif (!self::validActionUrl($url)) {
+                $e[] = new FieldError("{$field}.url", 'invalid_format', 'must be an https://, mailto:, tel: or sms: URL without spaces');
+            }
+
+            $keys = array_map('strval', array_keys($a));
+            sort($keys);
+            foreach ($keys as $key) {
+                if ($key !== 'title' && $key !== 'url') {
+                    $e[] = new FieldError("{$field}.{$key}", 'not_allowed', 'unknown field (an action has title and url)');
+                }
+            }
+        }
+    }
+
+    /**
+     * The server's check of a (trimmed, valid UTF-8) action URL, scheme in any case: https:// with
+     * a host and no credentials (as url), mailto: with one address and an optional
+     * ?subject=…&body=…, tel: / tel:// with a number, sms: with a number and an optional ?body=….
+     */
+    private static function validActionUrl(string $s): bool
+    {
+        if (preg_match(self::CONTROL, $s) === 1 || preg_match('/[' . self::SPACE . ']/u', $s) === 1 || ($colon = strpos($s, ':')) === false) {
+            return false;
+        }
+        $rest = substr($s, $colon + 1);
+        [$head, $query] = explode('?', $rest, 2) + [1 => ''];
+
+        return match (strtolower(substr($s, 0, $colon))) {
+            'https' => self::validUrl($s, false),
+            'mailto' => preg_match(self::BAD_ESCAPE, $head) !== 1 && preg_match(self::MAIL_ADDRESS, rawurldecode($head)) === 1 && self::actionQuery($query, ['subject', 'body']),
+            'tel' => preg_match(self::PHONE_NUMBER, str_starts_with($rest, '//') ? substr($rest, 2) : $rest) === 1,
+            'sms' => preg_match(self::PHONE_NUMBER, $head) === 1 && self::actionQuery($query, ['body']),
+            default => false,
+        };
+    }
+
+    /**
+     * The query of a mailto: or sms: action: valid percent-encoding, no ";" separators and only
+     * the allowed keys ("" is no query).
+     *
+     * @param list<string> $allowed
+     */
+    private static function actionQuery(string $query, array $allowed): bool
+    {
+        foreach (explode('&', $query) as $pair) {
+            if (str_contains($pair, ';') || preg_match(self::BAD_ESCAPE, $pair) === 1) {
+                return false;
+            }
+            if ($pair !== '' && !in_array(urldecode(explode('=', $pair, 2)[0]), $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** Trims Unicode White_Space, like the server's strings.TrimSpace (invalid UTF-8 is kept as is). */
+    private static function trimSpace(string $s): string
+    {
+        return preg_replace('/^[' . self::SPACE . ']+|[' . self::SPACE . ']+$/uD', '', $s) ?? $s;
     }
 
     /** The server's syntactic URL check: https, a host, no credentials, ≤ 2048 bytes. */

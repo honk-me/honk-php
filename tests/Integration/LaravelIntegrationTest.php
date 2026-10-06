@@ -48,12 +48,14 @@ final class LaravelIntegrationTest extends TestCase
                     ->channel('requests')
                     ->groupKey('requests/it-' . uniqid())
                     ->url('https://shop.example.com/admin/requests/4812')
+                    ->action('Reply', 'mailto:ana@acme.example?subject=Your%20quote')
+                    ->action('Call Ana', 'tel:+15550134')
                     ->meta('request_id', '4812');
             }
         };
         $owner->notify($notification);
 
-        Honk::queue(['message' => 'queued from Laravel', 'groupKey' => 'it/laravel/queue']);
+        Honk::queue(['message' => 'queued from Laravel', 'groupKey' => 'it/laravel/queue', 'actions' => [['title' => 'Text Ana', 'url' => 'sms:+15550134?body=On%20it']]]);
         $this->addToAssertionCount(1); // the calls above throw on any failure
     }
 

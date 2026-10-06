@@ -86,6 +86,17 @@ final class NotificationChannelTest extends TestCase
         $this->assertSame('from string', json_decode($r[1]['body'], true)['message']);
     }
 
+    public function testActionsAreSentFromHonkMessagesAndArrays(): void
+    {
+        $reply = ['title' => 'Reply', 'url' => 'mailto:ana@acme.example?subject=Your%20quote'];
+        $call = ['title' => 'Call Ana', 'url' => 'tel:+15550134'];
+        (new Owner())->notify(new InlineNotification(HonkMessage::make('Ana asked for a quote')->action($reply['title'], $reply['url'])->action($call['title'], $call['url'])));
+        (new Owner())->notify(new InlineNotification(['message' => 'Ana asked for a quote', 'actions' => [$reply, $call]]));
+        $r = $this->server->requests();
+        $this->assertSame([$reply, $call], json_decode($r[0]['body'], true)['actions']);
+        $this->assertSame([$reply, $call], json_decode($r[1]['body'], true)['actions']);
+    }
+
     public function testMissingToHonkIsALogicError(): void
     {
         $this->expectException(LogicException::class);
@@ -146,7 +157,7 @@ class QueuedCustomerRequested extends CustomerRequested implements ShouldQueue
 
 class InlineNotification extends Notification
 {
-    public function __construct(private readonly array|string $payload)
+    public function __construct(private readonly array|string|HonkMessage $payload)
     {
     }
 
@@ -155,7 +166,7 @@ class InlineNotification extends Notification
         return ['honk'];
     }
 
-    public function toHonk(object $notifiable): array|string
+    public function toHonk(object $notifiable): array|string|HonkMessage
     {
         return $this->payload;
     }
